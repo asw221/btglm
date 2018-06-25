@@ -3,8 +3,13 @@
 build
 lib/*
 
-# Ignore any executables
+# Ignore any executables or shared objects
 bin/*
+src/*.so
+src/*.o
+src/*.h~
+src/*.cpp~
+R/*.R~
 
 # Ignore temporary dirs
 _tmp
