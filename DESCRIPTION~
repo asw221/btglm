@@ -1,0 +1,21 @@
+Package: btglm
+Version: 0.1
+Date: 2018-6-15
+title: Bayesian threshold generalized linear models
+Description: This package fits distributed lag models (DLMs) to describe
+  how the association between the presence of built environment features
+  and an outcome varies as a function of distance between locations for
+  study participants and locations for environment features.
+Author: Andrew Whiteman <awhitem@umich.edu>,
+	Jian Kang <jiankang@umich.edu>
+Maintainer: Andrew Whiteman <awhitem@umich.edu>
+License: GPL (>= 2)
+Depends: R (>= 3.0.2),
+	 Rcpp,
+	 RcppEigen,
+	 glmnet,
+	 methods
+LinkingTo: Rcpp,
+	   RcppEigen
+Imports: glmnet
+Suggests: devtools

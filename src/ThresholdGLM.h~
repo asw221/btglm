@@ -1,0 +1,43 @@
+
+#define _USE_MATH_DEFINES
+#include <cmath>
+#include <Eigen/Core>
+#include <Eigen/SparseCore>
+
+#ifndef _THRESHOLD_GLM_
+#define _THRESHOLD_GLM_
+
+namespace ThresholdGLM {
+
+  using std::pow;
+
+
+
+  template< typename T = double >
+  T dcauchy(const T &x, const T &location = 0.0, const T &scale = 1.0) {
+    return (scale / ((pow(scale, 2) + pow(x - location, 2)) * M_PI));
+  };
+
+
+  double approxDThreshCauchy(
+    const double &theta,
+    const double &lambda,
+    const double &eps = 1e-6
+  ) {
+    return (dcauchy(theta, lambda, eps) +
+	    dcauchy(theta, -lambda, eps));
+  };
+
+  double approxDPsiCauchy(  // psi = ln(lambda) - ln(M - lambda)
+    const double &lambda,
+    const double &theta,
+    const double &M,
+    const double &eps = 1e-6
+  ) {
+    return (-lambda * (M - lambda) / M *
+	    (dcauchy(theta, lambda, eps) +
+	     dcauchy(theta, -lambda, eps)));
+  };
+}
+
+#endif  // _THRESHOLD_GLM_

@@ -1,0 +1,8 @@
+
+CC = /usr/local/clang6/bin/clang
+CXX = /usr/local/clang6/bin/clang++
+CXX11 = $CXX
+CXX14 = $CXX
+CXX17 = $CXX
+CXX1X = $CXX
+PKG_CXXFLAGS = -O3 -std=c++14 -I/usr/local/clang6/include

@@ -1,0 +1,158 @@
+
+#include <cmath>
+#include <Eigen/Core>
+#include <Eigen/SparseCore>
+#include <Rcpp.h>
+
+#include "ThresholdGLM.h"
+
+
+#ifndef _THRESHOLD_PARAMETERS_
+#define _THRESHOLD_PARAMETERS_
+
+
+class LMFixedLambda :
+  public Eigen::ArrayXd
+{
+private:
+  double _lambda;
+  double _M;       // lambda \in [0, M]
+  int _include;
+  Eigen::SparseMatrix<double, Eigen::RowMajor> _spar;
+  Eigen::ArrayXd _deriv;
+  Eigen::ArrayXd _derivPsi;
+
+  
+  virtual void computeDeriv() {
+    _deriv = this->unaryExpr([&](const double &x) {
+	return (ThresholdGLM::approxDThreshCauchy(x, _lambda) * x); });
+    _derivPsi = this->unaryExpr([&](const double &x) {
+	return (ThresholdGLM::approxDPsiCauchy(_lambda, x, _M) * x); });
+    // for (Eigen::ArrayXd::InnerIterator it(*this); it; ++it) {
+    //   _deriv.coeffRef(it.index()) =
+    // 	ThresholdGLM::approxDThreshCauchy(*it, _lambda) * (*it);
+    //   _derivPsi.coeffRef(it.index()) =
+    // 	ThresholdGLM::approxDPsiCauchy(_lambda, *it, _M) * (*it);
+    // }
+    for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(_spar, 0);
+	 it; ++it)
+      _deriv(it.index())++;
+    _deriv.coeffRef(_include) = 1.0;
+  };
+  
+public:
+  // LMFixedLambda(const double &lambda, const double &eps = 1e-8) :
+  //   Eigen::ArrayXd(), _lambda(lambda), _eps(eps)
+  // { ; }
+
+  // Allows construction from Eigen expressions
+  template< typename T >
+  LMFixedLambda(const Eigen::ArrayBase<T> &other,
+		const double &lambda,
+		const double &M) :
+    Eigen::ArrayXd(other), _lambda(lambda), _M(M), _include(0)
+  {
+    _deriv.resize(this->size());
+    _derivPsi.resize(this->size());
+    update();
+  };
+
+  // Allows Eigen expressions to be assigned to this class
+  template< typename T >
+  LMFixedLambda& operator=(const Eigen::ArrayBase<T> &other) {
+    this->Eigen::ArrayXd::operator=(other);
+    return (*this);
+  };
+
+
+
+  void setLambda(const double &lambda) {
+    _lambda = lambda;
+  };
+
+  void setSparse() {
+    _spar = this->matrix().sparseView(1, _lambda).transpose();
+    _spar.coeffRef(0, _include) = this->coeffRef(_include);
+  };
+
+  void update() {
+    setSparse();
+    computeDeriv();
+  };
+
+  double lambda() const {
+    return (_lambda);
+  };
+
+  double M() const {
+    return (_M);
+  };
+
+  Eigen::VectorXd residuals(
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y
+  ) const {
+    return (y - (_spar * X.transpose()).transpose());
+  };
+
+  double objective(
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &tauSq
+  ) const {
+    const Eigen::VectorXd resid = residuals(X, y);
+    return (-0.5 * (resid.squaredNorm() +
+		    this->matrix().squaredNorm() / tauSq)
+	    );
+  };
+
+
+  friend Eigen::ArrayXd lmUnitGradient(
+    const LMFixedLambda &theta,
+    const int &i,
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &tauSq
+  );
+
+};
+
+
+
+
+// template< typename T, typename S >
+Eigen::ArrayXd lmUnitGradient(
+  const LMFixedLambda &theta,
+  const int &i,
+  const Eigen::MatrixXd &X,
+  const Eigen::VectorXd &y,
+  const double &tauSq
+) {
+  const double mu = (theta._spar * X.row(i).transpose())(0);
+  Eigen::ArrayXd grad(theta.size() + 1);
+  grad.head(theta.size()) = (theta._deriv * X.row(i).transpose().array())
+    + (theta / (tauSq * X.rows()));
+  grad.coeffRef(theta._include) -= theta.coeffRef(theta._include) /
+    (tauSq * X.rows());
+  grad.tail(1) = (X.row(i).transpose() * theta._derivPsi.matrix())(0);
+  grad *= (mu - y(i));  // multiply by negative residual
+  return (grad);
+};
+
+
+
+void updateTheta(LMFixedLambda &theta, Eigen::ArrayXd &delta) {
+  Rcpp::Rcout << "Correct update scheme\n";
+  const double M = theta.M();
+  const double lambda = theta.lambda();
+  theta -= delta.head(theta.size());
+  theta.setLambda(M * lambda /
+		  (std::exp(delta.tail(1)(0)) * (M - lambda) + lambda));
+  theta.update();
+};
+
+
+
+#endif  // _THRESHOLD_PARAMETERS_
+
+

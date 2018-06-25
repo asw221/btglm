@@ -1,0 +1,14 @@
+
+useDynLib (btglm)
+
+import (glmnet)
+import (RcppEigen)
+importFrom (Rcpp, sourceCpp)
+
+## exportPattern("ˆ[[:alpha:]]+")
+export ("btlmPostMode")
+
+## export ()
+## export ()
+## exportClasses ()
+## exportMethods ()

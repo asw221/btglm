@@ -1,0 +1,16 @@
+
+#include <Rcpp.h>
+#include <RcppEigen.h>
+#include <Eigen/Core>
+
+#include "ThresholdParameters.h"
+
+
+
+extern "C" lmGradient(const SEXP X_, const SEXP y_,
+		      const SEXP tauSq_, const SEXP lambda_) {
+  LMFixedLambda beta(Rcpp::as<Map<Eigen::ArrayXd> >(beta_),
+		     Rcpp::as<double>(lambda_)
+		     );
+  return ();
+};
