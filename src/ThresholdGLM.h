@@ -1,6 +1,8 @@
 
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <Eigen/Core>
+#include <random>
 
 using std::pow;
 
@@ -10,12 +12,12 @@ using std::pow;
 
 namespace ThresholdGLM {
 
-  // namespace constants {
-  //   extern double epsCauchy;
-  //   extern double updateCauchyScale;
-  //
-  //   extern int updateLambdaAfter;
-  // };
+  extern std::mt19937 _rng_;
+  extern std::uniform_real_distribution<double> _Uniform_;
+
+  // extern double _dthreshScale_;
+  // extern double _pRejectDecay_;
+  // extern double _pRejectTarget_[2];
 
 
   template< typename T = double >
@@ -36,6 +38,37 @@ namespace ThresholdGLM {
     const double &M,
     const double &eps = 1e-6
   );
+
+
+
+  
+  class glmLink
+  {
+  public:
+    glmLink()
+    { ; }
+      
+    virtual double operator()(const double &x) const;
+    virtual Eigen::ArrayXd operator()(const Eigen::ArrayXd &ary) const;
+    virtual double inverse(const double &x) const;
+    virtual Eigen::ArrayXd inverse(const Eigen::ArrayXd &ary) const;
+  };
+
+
+
+  class logit :
+    public glmLink
+  {
+  public:
+    logit() : glmLink()
+    { ; }
+    
+    virtual double operator()(const double &x) const override;
+    virtual Eigen::ArrayXd operator()(const Eigen::ArrayXd &ary) const override;
+    virtual double inverse(const double &x) const override;
+    virtual Eigen::ArrayXd inverse(const Eigen::ArrayXd &ary) const override;
+  };
+
   
 }
 

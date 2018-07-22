@@ -11,13 +11,19 @@ Author: Andrew Whiteman <awhitem@umich.edu>,
 Maintainer: Andrew Whiteman <awhitem@umich.edu>
 License: GPL (>= 2)
 Depends: R (>= 3.0.2),
-	 Rcpp (>= 0.12.17),
-	 RcppEigen (>= 0.3.3.4.0),
+	 coda,
+	 foreach,
 	 glmnet,
-	 methods
+	 iterators,
+	 methods,
+	 Rcpp (>= 0.12.17),
+	 RcppEigen (>= 0.3.3.4.0)
 LinkingTo: Rcpp,
 	   RcppEigen
-Imports: glmnet
+Imports: coda,
+	 foreach,
+	 glmnet,
+	 iterators
 Suggests: devtools,
     testthat
 RoxygenNote: 6.0.1

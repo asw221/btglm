@@ -1,12 +1,21 @@
 
 useDynLib (btglm)
 
+import (coda)
+import (foreach)
 import (glmnet)
+import (iterators)
 import (RcppEigen)
 importFrom (Rcpp, sourceCpp)
 
 ## exportPattern("ˆ[[:alpha:]]+")
-export ("btlmPostMode", "coef.btglm")
+export ("approx.minima",
+        "btlm", "btlmPostMode", "btglmControl",
+        "btglm", "btglmPostMode",
+        "close.match", "coef.btglm", "cv.btlm",
+        "mse", "plot.cv.btglm", "pnz", "pnz.btglm",
+        "select.lambda.bic"
+        )
 
 ## export ()
 ## export ()

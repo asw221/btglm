@@ -25,17 +25,21 @@ class AdaM
 private :
   T _mt;             // current momentum
   T _vt;             // current velocity
+  bool _useLD;       // flag to adopt Langevin Dynamics
+  bool _useRMS;      // flag to adopt "RMSprop" updates
   double _eta;       // learning rate
   double _gamma[2];  // momentum/velocity decay rates
   double _eps;       // avoid division by zero constant
   double _dtheta;    // || \theta^(t) - \theta^(t-1) ||^2
   int _iter;         // current number of updates
 
+  T computeDelta(std::mt19937 &rng) const;
   void updateMomentum(const T &gt);
   void updateVelocity(const T &gt);
 
+  
   template< typename S >
-  void updatePosition(S &theta);
+  void updatePosition(S &theta, std::mt19937 &rng);
 
 
 public :
@@ -51,23 +55,43 @@ public :
   // Update methods
   // type R is the same as the type returned by the gradient function
   template< typename S, typename R, typename... Args >
-  void update(S &theta, R gradient(const S &theta, Args&...), Args&... args);
+  void update(S &theta, R gradient(const S &theta, Args&&...), Args&&... args);
 
   template< typename S, typename R, typename... Args >
   void minibatchUpdate(
     S &theta,
-    R unitGradient(const S &theta, const int &i, Args&...),
+    R unitGradient(const S &theta, const int &i, Args&&...),
     std::mt19937 &rng,
     const int &batchSize,
     std::vector<int> &index,
-    Args&... args
+    Args&&... args
   );
 
+  template< typename S, typename R, typename... Args >
+  void virtualMinibatch(
+    S &theta,
+    R unitGradient(const S&theta, const int &i, Args&&...),
+    std::mt19937 &rng,
+    const int &batchSize,
+    std::vector<int> &index,
+    Args&&... args
+  );
 
   // Simple getter methods
+  const T& momentum() const;
+  const T& velocity() const;
   bool converged(const double &tol = 1e-6) const;
   int iteration() const;
   double dtheta() const;
+  double eta() const;
+
+  // Setter methods
+  void eta(const double &eta);
+  
+  void clearHistory();
+  void incrementIteration();
+  void toggleLangevinDynamics(const bool &useLD = true);
+  void toggleRMSprop(const bool &useRMS = true);
 };
 
 

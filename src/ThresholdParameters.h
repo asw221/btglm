@@ -1,61 +1,181 @@
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
+#include <memory>
+#include <Rcpp.h>
 
+#include "AdaM.h"
 #include "ThresholdGLM.h"
 
 
 #ifndef _THRESHOLD_PARAMETERS_
 #define _THRESHOLD_PARAMETERS_
 
+class LMFixedLambda;
+
+template< typename Link >
+class GLMFixedLambda;
+
+
+
+
+
+// (Overloaded) updateTheta() allows class to interface with gradient
+// update methods
+void updateTheta(LMFixedLambda &theta, Eigen::ArrayXd &delta);
+
+
+template< typename Link >
+void updateTheta(GLMFixedLambda<Link> &theta, Eigen::ArrayXd &delta);
+
+
+Eigen::SparseMatrix<double, Eigen::RowMajor> activeCoefGradient(
+  const LMFixedLambda &theta,
+  const Eigen::MatrixXd &X,
+  const Eigen::VectorXd &y,
+  const double &priorPrecision
+);
+
+
+Eigen::ArrayXd lmUnitGradient(
+  const LMFixedLambda &theta,
+  const int &i,
+  const Eigen::MatrixXd &X,
+  const Eigen::VectorXd &y,
+  const double &priorPrecision
+);
+
+
+void sgldUpdate(
+  LMFixedLambda &theta,
+  AdaM<Eigen::ArrayXd> &sgd,
+  const int &batchSize,
+  std::vector<int> &dataIndex,
+  double &learningScale,
+  double &acceptanceProbability,
+  const bool updateLearningScale,
+  const Eigen::MatrixXd &X,
+  const Eigen::VectorXd &y,
+  const double &residualPrecision,
+  const double &priorPrecision,
+  const double &metropolisTarget = 0.44
+);
+
+
+
+
+
+template< typename Link >
+Eigen::ArrayXd glmUnitGradient(
+  const GLMFixedLambda<Link> &theta,
+  const int &i,
+  const Eigen::MatrixXd &X,
+  const Eigen::VectorXd &y,
+  const double &priorPrecision
+);
+
+// template< typename Link >
+// void sgldUpdate(
+//   GLMFixedLambda<Link> &theta,
+//   AdaM<Eigen::ArrayXd> &sgd,
+//   const int &batchSize,
+//   std::vector<int> &dataIndex,
+//   std::vector<double> &learningScale,
+//   std::vector<double> &acceptanceProbability,
+//   const bool updateLearningScale,
+//   const Eigen::MatrixXd &X,
+//   const Eigen::VectorXd &y,
+//   const double &priorPrecision,
+//   const double &metropolisTarget
+// );
+
+
+
+
+
+
+
+
+
+// LMFixedLambda -----------------------------------------------------
 
 class LMFixedLambda :
   public Eigen::ArrayXd
 {
-private:
+protected:
   double _lambda;
   double _M;       // lambda \in [0, M]
-  Eigen::SparseMatrix<double, Eigen::RowMajor> _spar;
+  
   Eigen::ArrayXd _deriv;
-  Eigen::ArrayXd _derivPsi;
-  int _include;  // change to Rcpp::IntegerVector
-  int _iter;
-
+  Eigen::SparseMatrix<double, Eigen::RowMajor> _spar;
+  Rcpp::IntegerVector _include;  //
+  
   virtual void computeDeriv();
   
 public:
+  // Allows construction from Eigen expressions
+  template< typename T >
+  LMFixedLambda(const Eigen::ArrayBase<T> &other,
+		const double &lambda,
+		const double &lambdaMax,
+		const Rcpp::IntegerVector &include) :
+    Eigen::ArrayXd(other),
+    _include(include)
+  {
+    if (lambdaMax <= 0)
+      throw (std::logic_error("Maximal lambda value must be >= 0"));
+    if (lambda < 0 || lambda > lambdaMax)
+      throw (std::logic_error("lambda sould be between [0, lambdaMax]"));
+    _lambda = lambda;
+    _M = lambdaMax;
+    _deriv = Eigen::ArrayXd::Zero(this->size());
+    update();
+  };
+
+  
+
+  friend Eigen::SparseMatrix<double, Eigen::RowMajor> activeCoefGradient(
+    const LMFixedLambda &theta,
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &priorPrecision
+  );
+  
   // Unit Gradient function controls how class handles gradient updates
   friend Eigen::ArrayXd lmUnitGradient(
     const LMFixedLambda &theta,
     const int &i,
     const Eigen::MatrixXd &X,
     const Eigen::VectorXd &y,
-    const double &tauSq
+    const double &priorPrecision
   );
 
-  
-  // Allows construction from Eigen expressions
-  template< typename T >
-  LMFixedLambda(const Eigen::ArrayBase<T> &other,
-		const double &lambda,
-		const double &M) :
-    Eigen::ArrayXd(other), _lambda(lambda), _M(M), _include(0), _iter(1)
-  {
-    _deriv.resize(this->size());
-    _derivPsi.resize(this->size());
-    update();
-  };
+  friend void sgldUpdate(
+    LMFixedLambda &theta,
+    AdaM<Eigen::ArrayXd> &sgd,
+    const int &batchSize,
+    std::vector<int> &dataIndex,
+    double &learningScale,
+    double &acceptanceProbability,
+    const bool updateLearningScale,
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &residualPrecision,
+    const double &priorPrecision,
+    const double &metropolisTarget
+  );  
   
 
   // Setters
-  void setLambda(const double &lambda);
+  void lambda(const double &lambda);
   void setSparse();
   void update();
 
   // Getters
-  int iteration() const;
+  int nonZeros() const;
   double lambda() const;
-  double M() const;
+  double lambdaMax() const;
+  double minSparseCoeff() const;
 
   
   // Allows Eigen expressions to be assigned to this class
@@ -71,28 +191,82 @@ public:
     const Eigen::VectorXd &y
   ) const;
 
-  
   // Maybe not the best place for this
   virtual double objective(
     const Eigen::MatrixXd &X,
     const Eigen::VectorXd &y,
-    const double &tauSq
+    const double &priorPrecision
   ) const;
+};
 
+// LMFixedLambda -----------------------------------------------------
+
+
+
+
+
+// GLMFixedLambda ----------------------------------------------------
+
+template< typename Link = ThresholdGLM::glmLink >
+class GLMFixedLambda :
+  public LMFixedLambda
+{
+protected:
+  Link _link;
+  double _phi;  // dispersion parameter
+
+public:
+  template< typename T >
+  GLMFixedLambda(const Eigen::ArrayBase<T> &other,
+		 const double &lambda,
+		 const double &lambdaMax,
+		 const Rcpp::IntegerVector &include,
+		 const double &dispersion = 1.0) :
+    LMFixedLambda(other, lambda, lambdaMax, include),
+    _phi(dispersion)
+  { ; }
+
+  
+  // Unit Gradient function controls how class handles gradient updates
+  template< typename T >
+  friend Eigen::ArrayXd glmUnitGradient(
+    const GLMFixedLambda<T> &theta,
+    const int &i,
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &priorPrecision
+  );
+
+  void sgldUpdate(
+    AdaM<Eigen::ArrayXd> &sgd,
+    const int &batchSize,
+    std::vector<int> &dataIndex,
+    double &learningScale,
+    double &acceptanceProbability,
+    const bool updateLearningScale,
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    // const double &residualPrecision,
+    const double &priorPrecision,
+    const double &metropolisTarget
+  );
+  
+
+  virtual Eigen::VectorXd residuals(
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y
+  ) const override;
+
+  virtual double objective(
+    const Eigen::MatrixXd &X,
+    const Eigen::VectorXd &y,
+    const double &priorPrecision
+  ) const override;
 };
 
 
-// (Overloaded) updateTheta() allows class to interface with gradient
-// update methods
-void updateTheta(LMFixedLambda &theta, Eigen::ArrayXd &delta);
+#include "GLMFixedLambda.inl"
 
-Eigen::ArrayXd lmUnitGradient(
-  const LMFixedLambda &theta,
-  const int &i,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &tauSq
-);
 
 #endif  // _THRESHOLD_PARAMETERS_
 
