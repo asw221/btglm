@@ -1,7 +1,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <Eigen/Core>
 #include <random>
 #include <vector>
 
