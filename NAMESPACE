@@ -10,11 +10,16 @@ importFrom (Rcpp, sourceCpp)
 
 ## exportPattern("ˆ[[:alpha:]]+")
 export ("approx.minima",
+        "BIC.btglm",
         "btlm", "btlmPostMode", "btglmControl",
         "btglm", "btglmPostMode",
         "close.match", "coef.btglm", "cv.btlm",
-        "mse", "plot.cv.btglm", "pnz", "pnz.btglm",
-        "select.lambda.bic"
+        "logLik.btglm",
+        "mse",
+        "nobs.btglm",
+        "plot.cv.btglm", "pnz", "pnz.btglm",
+        "residuals.btglm",
+        "select.lambda.bic", "sigma.btglm"
         )
 
 ## export ()

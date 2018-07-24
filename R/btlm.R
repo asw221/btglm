@@ -63,7 +63,7 @@ sigma.btglm <- function(object, ...) {
 }
 
 residuals.btglm <- function(object, X, y, ...) {
-  c(y - X %*% coef(object, ...))
+  c(y - t(t(coef(object, ...)) %*% X))
 }
 
 logLik.btglm <- function(object, X, y, ...) {
@@ -71,7 +71,7 @@ logLik.btglm <- function(object, X, y, ...) {
   if (is.null(fam))
     ll <- sum(dnorm(residuals(object, X, y), sd = sigma(object), log = TRUE))
   else if (fam$family == "binomial")
-    ll <- sum(dbinom(y, 1, fam$linkinv(X %*% coef(object)), log = TRUE))
+    ll <- sum(dbinom(y, 1, fam$linkinv(t(coef(object)) %*% X), log = TRUE))
   structure(ll, nall = nobs(object), nobs = nobs(object),
             df = sum(coef(object) != 0) + 1,
             class = "logLik")
@@ -88,15 +88,20 @@ select.lambda.bic <- function(X, y, beta0, M, nlambda = 50,
                               lambda.min.ratio = 1 / nlambda, ...,
                               .func = btlmPostMode, .parallel = FALSE,
                               .verbose = TRUE, .cost = BIC) {
+  if (ncol(X) == length(beta0))
+    X <- t(X)
+  else if (nrow(X) != length(beta0))
+    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
   `%_%` <- if (.parallel) `%dopar%` else `%do%`
   lambda.seq <- lambda.grid(M, nlambda, lambda.min.ratio, .log = TRUE)
-  foreach (lambda = lambda.seq, .combine = "c") %_% {
+  foreach (lambda = lambda.seq, .combine = "c", .errorhandling = "remove") %_% {
     fit <- .func(X, y, beta0, M = M, ..., lambda = lambda)
-    if (.verbose)
-      cat ("lambda =", lambda, "\n")
     ## if (!.parallel)
     ##   beta0 <- coef(out, FALSE)
-    .cost(fit, X, y)
+    cst <- .cost(fit, X, y)
+    if (.verbose)
+      cat ("lambda = ", lambda, ", ", cst, "\n", sep = "")
+    cst
   } ->
     objective
   se <- 1 + log(length(y))

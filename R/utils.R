@@ -24,7 +24,7 @@ lambda.grid <- function(lambda.max, ngrid = 50, min.ratio = 1 / ngrid, .log = TR
   end.pts <- c(lambda.max * min.ratio, lambda.max)
   if (.log) {
     end.pts <- log(end.pts)
-    exp(seq(end.pts[1], end.pts[2], length.out = ngrid))
+    pmin(exp(seq(end.pts[1], end.pts[2], length.out = ngrid)), lambda.max)
   }
   else
     seq(end.pts[1], end.pts[2], length.out = ngrid)
