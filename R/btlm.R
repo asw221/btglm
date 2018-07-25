@@ -2,7 +2,7 @@
 
 btlm <- function(X, y, beta0, lambda = NULL,
                  tau.sq = 1e4, M = NULL, include = 1,
-                 batch.size = min(100, nrow(X)),
+                 batch.size = NULL,
                  n.save = 100, thin = 200, burnin = 500,
                  iter.max.sgd = 2000, eps = 1e-8, tol = 1e-6,
                  learning.rate = NULL, metropolis.target = 0.9,
@@ -17,6 +17,7 @@ btlm <- function(X, y, beta0, lambda = NULL,
     X <- t(X)
   else if (nrow(X) != length(beta0))
     stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
+  if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   n.save <- floor(n.save)
   thin <- floor(thin)
   burnin <- floor(burnin)
@@ -32,7 +33,7 @@ btlm <- function(X, y, beta0, lambda = NULL,
 
 btlmPostMode <- function(X, y, beta0, lambda = NULL,
                          tau.sq = 1e4, M = NULL, include = 1,
-                         batch.size = min(100, nrow(X)),
+                         batch.size = NULL,
                          iter.max = 1000, eps = 1e-8, tol = 1e-6,
                          learning.rate = NULL, mt.decay = 0.9, vt.decay = 0.99,
                          rng.seed = NULL
@@ -45,6 +46,7 @@ btlmPostMode <- function(X, y, beta0, lambda = NULL,
     X <- t(X)
   else if (nrow(X) != length(beta0))
     stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
+  if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   structure(
     .Call("btlmPostApprox", X, y, beta0, lambda, tau.sq, M, include - 1,
           batch.size, iter.max, eps, tol, learning.rate, mt.decay, vt.decay,
@@ -182,7 +184,7 @@ coef.btglm <- function(object, threshold = TRUE) {
 pnz <- function(object, ...)  UseMethod("pnz")
 
 pnz.btglm <- function(object, ...) {
-  if (!is.matrix(out$coefficients))
+  if (!is.matrix(object$coefficients))
     stop ('Object "', deparse(substitute(object)), '" not fit using MCMC')
   ans <- rep(1, ncol(object$coefficients))
   incl <- object$include + 1
