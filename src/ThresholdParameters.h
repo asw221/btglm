@@ -29,12 +29,6 @@ template< typename Link >
 void updateTheta(GLMFixedLambda<Link> &theta, Eigen::ArrayXd &delta);
 
 
-Eigen::SparseMatrix<double, Eigen::RowMajor> activeCoefGradient(
-  const LMFixedLambda &theta,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &priorPrecision
-);
 
 
 Eigen::ArrayXd lmUnitGradient(
@@ -46,20 +40,20 @@ Eigen::ArrayXd lmUnitGradient(
 );
 
 
-void sgldUpdate(
-  LMFixedLambda &theta,
-  AdaM<Eigen::ArrayXd> &sgd,
-  const int &batchSize,
-  std::vector<int> &dataIndex,
-  double &learningScale,
-  double &acceptanceProbability,
-  const bool updateLearningScale,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &residualPrecision,
-  const double &priorPrecision,
-  const double &metropolisTarget = 0.44
-);
+// void sgldUpdate(
+//   LMFixedLambda &theta,
+//   AdaM<Eigen::ArrayXd> &sgd,
+//   const int &batchSize,
+//   std::vector<int> &dataIndex,
+//   double &learningScale,
+//   double &acceptanceProbability,
+//   const bool updateLearningScale,
+//   const Eigen::MatrixXd &X,
+//   const Eigen::VectorXd &y,
+//   const double &residualPrecision,
+//   const double &priorPrecision,
+//   const double &metropolisTarget = 0.44
+// );
 
 
 
@@ -103,12 +97,18 @@ class LMFixedLambda :
   public Eigen::ArrayXd
 {
 protected:
-  double _lambda;
-  double _M;       // lambda \in [0, M]
+  double _lambda;               // threshold parameter
+  double _priorModelSizeScale;  // prior hyperparamter, k
   
-  Eigen::ArrayXd _deriv;
-  Eigen::SparseMatrix<double, Eigen::RowMajor> _spar;
-  Rcpp::IntegerVector _include;  //
+  Eigen::ArrayXd _deriv;        // diagonal derivative of \sigma(\beta) 
+  Eigen::ArrayXd _priorDeriv;   // derivative of k * \sum_j H(\beta_j)
+  Eigen::VectorXd _spar;        // \sigma(\beta)
+  // Store these because with stochastic gradient update schemes, these
+  // parameters need to be evaluated potentially at every data point,
+  // but their values don't change between gradient updates
+  
+  Rcpp::IntegerVector _include;
+  // Integer index set of coefficients that should always be active
   
   virtual void computeDeriv();
   
@@ -117,29 +117,25 @@ public:
   template< typename T >
   LMFixedLambda(const Eigen::ArrayBase<T> &other,
 		const double &lambda,
-		const double &lambdaMax,
-		const Rcpp::IntegerVector &include) :
+		const Rcpp::IntegerVector &include,
+		const double priorModelSizeScale = 2.0) :
     Eigen::ArrayXd(other),
+    _priorModelSizeScale(priorModelSizeScale),
     _include(include)
   {
-    if (lambdaMax <= 0)
-      throw (std::logic_error("Maximal lambda value must be >= 0"));
-    if (lambda < 0 || lambda > lambdaMax)
-      throw (std::logic_error("lambda sould be between [0, lambdaMax]"));
+    if (lambda < 0)
+      throw (std::logic_error("lambda sould be >= 0"));
     _lambda = lambda;
-    _M = lambdaMax;
     _deriv = Eigen::ArrayXd::Zero(this->size());
-    update();
+    _priorDeriv = Eigen::ArrayXd::Zero(this->size());
+    _spar = Eigen::VectorXd::Zero(this->size());
+    // update();
+    setSparse();
   };
 
   
 
-  friend Eigen::SparseMatrix<double, Eigen::RowMajor> activeCoefGradient(
-    const LMFixedLambda &theta,
-    const Eigen::MatrixXd &X,
-    const Eigen::VectorXd &y,
-    const double &priorPrecision
-  );
+  
   
   // Unit Gradient function controls how class handles gradient updates
   friend Eigen::ArrayXd lmUnitGradient(
@@ -150,20 +146,21 @@ public:
     const double &priorPrecision
   );
 
-  friend void sgldUpdate(
-    LMFixedLambda &theta,
-    AdaM<Eigen::ArrayXd> &sgd,
-    const int &batchSize,
-    std::vector<int> &dataIndex,
-    double &learningScale,
-    double &acceptanceProbability,
-    const bool updateLearningScale,
-    const Eigen::MatrixXd &X,
-    const Eigen::VectorXd &y,
-    const double &residualPrecision,
-    const double &priorPrecision,
-    const double &metropolisTarget
-  );  
+  // friend void sgldUpdate(
+  //   LMFixedLambda &theta,
+  //   AdaM<Eigen::ArrayXd> &sgd,
+  //   const int &batchSize,
+  //   std::vector<int> &dataIndex,
+  //   double &learningScale,
+  //   double &acceptanceProbability,
+  //   const bool updateLearningScale,
+  //   const Eigen::MatrixXd &X,
+  //   const Eigen::VectorXd &y,
+  //   const double &residualPrecision,
+  //   const double &priorPrecision,
+  //   const double &metropolisTarget
+  // );
+  
   
 
   // Setters
@@ -172,10 +169,7 @@ public:
   void update();
 
   // Getters
-  int nonZeros() const;
   double lambda() const;
-  double lambdaMax() const;
-  double minSparseCoeff() const;
 
   
   // Allows Eigen expressions to be assigned to this class
@@ -237,19 +231,19 @@ public:
     const double &priorPrecision
   );
 
-  void sgldUpdate(
-    AdaM<Eigen::ArrayXd> &sgd,
-    const int &batchSize,
-    std::vector<int> &dataIndex,
-    double &learningScale,
-    double &acceptanceProbability,
-    const bool updateLearningScale,
-    const Eigen::MatrixXd &X,
-    const Eigen::VectorXd &y,
-    // const double &residualPrecision,
-    const double &priorPrecision,
-    const double &metropolisTarget
-  );
+  // void sgldUpdate(
+  //   AdaM<Eigen::ArrayXd> &sgd,
+  //   const int &batchSize,
+  //   std::vector<int> &dataIndex,
+  //   double &learningScale,
+  //   double &acceptanceProbability,
+  //   const bool updateLearningScale,
+  //   const Eigen::MatrixXd &X,
+  //   const Eigen::VectorXd &y,
+  //   // const double &residualPrecision,
+  //   const double &priorPrecision,
+  //   const double &metropolisTarget
+  // );
   
 
   virtual Eigen::VectorXd residuals(

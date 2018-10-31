@@ -27,6 +27,7 @@ private :
   bool _useLD;       // flag to adopt Langevin Dynamics
   bool _useRMS;      // flag to adopt "RMSprop" updates
   double _eta;       // learning rate
+  double _etaScl;    // extra learning rate scaling parameter
   double _gamma[2];  // momentum/velocity decay rates
   double _eps;       // avoid division by zero constant
   double _dtheta;    // || \theta^(t) - \theta^(t-1) ||^2

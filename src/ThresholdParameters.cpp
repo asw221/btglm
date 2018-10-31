@@ -18,96 +18,72 @@ using std::pow;
 
 void updateTheta(LMFixedLambda &theta, Eigen::ArrayXd &delta) {
   theta -= delta;
-  theta.update();
-}
-
-
-void sgldUpdate(
-  LMFixedLambda &theta,
-  AdaM<Eigen::ArrayXd> &sgd,
-  const int &batchSize,
-  std::vector<int> &dataIndex,
-  double &learningScale,
-  double &acceptanceProbability,
-  const bool updateLearningScale,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &residualPrecision,
-  const double &priorPrecision,
-  const double &metropolisTarget
-) {
-  const double decay = 0.9, k = 0.01;
-  double gradScale = residualPrecision * dataIndex.size() / batchSize;
-  double lpCurrent, lpProposal, pAccept;
-  
-  // Compute SGD update step -----------------------------------------
-  sgd.virtualMinibatch
-    <LMFixedLambda, Eigen::ArrayXd, const Eigen::MatrixXd&,
-     const Eigen::VectorXd&, const double&>
-    (theta, lmUnitGradient, ThresholdGLM::_rng_, batchSize,
-     dataIndex, X, y, priorPrecision);
-
-  Eigen::ArrayXd Mass = Eigen::ArrayXd::Constant(theta.size(),
-    theta._lambda * pow(std::log(theta.size()) / theta.size(), 2));
-  for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator
-	 it(theta._spar, 0); it; ++it)
-    Mass.coeffRef(it.index()) = sqrt(1 / (sgd.velocity().coeffRef(it.index()) + 1e-8));
-  double eta = sgd.eta() * learningScale;
-  Eigen::ArrayXd delta = eta * Mass * sgd.momentum() +
-    sqrt(2 * eta / gradScale) * gaussianNoise(sqrt(Mass), ThresholdGLM::_rng_);
-
-  lpCurrent = theta.objective(X, y, priorPrecision);
-  theta -= delta;
+  // theta.update();
   theta.setSparse();
-  lpProposal = theta.objective(X, y, priorPrecision);
-  pAccept = std::min(std::exp(
-    residualPrecision * (lpProposal - lpCurrent)), 1.0);
-  acceptanceProbability = acceptanceProbability * decay +
-    pAccept * (1 - decay);
-  if (ThresholdGLM::_Uniform_(ThresholdGLM::_rng_) < pAccept)
-    theta.computeDeriv();
-  else {  // reject update
-    theta += delta;
-    theta.setSparse();
-  }
-  if (updateLearningScale) {
-    if (acceptanceProbability < metropolisTarget)
-      learningScale *= 1 - k;
-    else
-      learningScale *= 1 + k;
-  }
+  theta.lambda(std::max(theta.lambda() * ThresholdGLM::_lambdaDecayRate_,
+			ThresholdGLM::_minLambda_));
 };
 
 
+// void sgldUpdate(
+//   LMFixedLambda &theta,
+//   AdaM<Eigen::ArrayXd> &sgd,
+//   const int &batchSize,
+//   std::vector<int> &dataIndex,
+//   double &learningScale,
+//   double &acceptanceProbability,
+//   const bool updateLearningScale,
+//   const Eigen::MatrixXd &X,
+//   const Eigen::VectorXd &y,
+//   const double &residualPrecision,
+//   const double &priorPrecision,
+//   const double &metropolisTarget
+// ) {
+//   const double decay = 0.9, k = 0.01;
+//   double gradScale = residualPrecision * dataIndex.size() / batchSize;
+//   double lpCurrent, lpProposal, pAccept;
+  
+//   // Compute SGD update step -----------------------------------------
+//   sgd.virtualMinibatch
+//     <LMFixedLambda, Eigen::ArrayXd, const Eigen::MatrixXd&,
+//      const Eigen::VectorXd&, const double&>
+//     (theta, lmUnitGradient, ThresholdGLM::_rng_, batchSize,
+//      dataIndex, X, y, priorPrecision);
+
+//   Eigen::ArrayXd Mass = Eigen::ArrayXd::Constant(theta.size(),
+//     theta._lambda * pow(std::log(theta.size()) / theta.size(), 2));
+//   for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator
+// 	 it(theta._spar, 0); it; ++it)
+//     Mass.coeffRef(it.index()) = sqrt(1 / (sgd.velocity().coeffRef(it.index()) + 1e-8));
+//   double eta = sgd.eta() * learningScale;
+//   Eigen::ArrayXd delta = eta * Mass * sgd.momentum() +
+//     sqrt(2 * eta / gradScale) * gaussianNoise(sqrt(Mass), ThresholdGLM::_rng_);
+
+//   lpCurrent = theta.objective(X, y, priorPrecision);
+//   theta -= delta;
+//   theta.setSparse();
+//   lpProposal = theta.objective(X, y, priorPrecision);
+//   pAccept = std::min(std::exp(
+//     residualPrecision * (lpProposal - lpCurrent)), 1.0);
+//   acceptanceProbability = acceptanceProbability * decay +
+//     pAccept * (1 - decay);
+//   if (ThresholdGLM::_Uniform_(ThresholdGLM::_rng_) < pAccept)
+//     theta.computeDeriv();
+//   else {  // reject update
+//     theta += delta;
+//     theta.setSparse();
+//   }
+//   if (updateLearningScale) {
+//     if (acceptanceProbability < metropolisTarget)
+//       learningScale *= 1 - k;
+//     else
+//       learningScale *= 1 + k;
+//   }
+// };
 
 
 
-Eigen::SparseMatrix<double, Eigen::RowMajor> activeCoefGradient(
-  const LMFixedLambda &theta,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &priorPrecision
-) {
-  // do some fancy shuffling with the index values to
-  // avoid using SparseMatrix::coeffRef()
-  const double scale = 1e-6;
-  double gradThresh, logPriorGrad;
-  Eigen::SparseMatrix<double, Eigen::RowMajor> grad = theta._spar;
-  Eigen::VectorXd residuals = theta.residuals(X, y);
-  int i = 0;
-  for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator
-	 it(grad, 0); it; ++it) {
-    logPriorGrad = it.value() * priorPrecision;
-    gradThresh = ThresholdGLM::approxDThreshCauchy
-      (it.value(), theta._lambda, scale) * it.value();
-    it.valueRef() = -(1 + gradThresh) * X.row(it.index()) * residuals;
-    if (it.index() == theta._include[i])
-      i++;
-    else
-      it.valueRef() += logPriorGrad;
-  }
-  return (grad);
-}
+
 
 
 
@@ -118,31 +94,40 @@ Eigen::ArrayXd lmUnitGradient(
   const Eigen::VectorXd &y,
   const double &priorPrecision
   ) {
-  const double mu = (theta._spar * X.col(i))(0);
+  const double mu = (X.row(i) * theta._spar)(0);
+  double j, k;  // loop vars
   Eigen::ArrayXd grad(theta.size());
-  grad = (theta._deriv * X.col(i).array()) * (mu - y(i))
-    + (theta * priorPrecision / X.cols());
-  for (int i = 0; i < theta._include.size(); i++)
-    grad.coeffRef(theta._include[i]) -= theta.coeffRef(theta._include[i]) *
-      priorPrecision / X.cols();
+  grad = (theta._deriv * X.row(i).transpose().array()) * (mu - y(i))
+    + (priorPrecision * theta + theta._priorDeriv) / X.rows();
+  for (j = 0; j < theta._include.size(); j++) {
+    k = theta._include[j];
+    grad.coeffRef(k) -= (priorPrecision * theta.coeffRef(k) +
+       theta._priorDeriv.coeffRef(k)) / X.rows();
+  }
   return (grad);
 };
 
 
 
 
-void LMFixedLambda::computeDeriv() {
-  const double scale = 1e-6;
-  _deriv = this->unaryExpr([&](const double &x) {
-      return (ThresholdGLM::approxDThreshCauchy(x, _lambda, scale) * x); });
-  for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(_spar, 0);
-       it; ++it)
-    _deriv(it.index())++;
-  for (int i = 0; i < _include.size(); i++)
-    _deriv.coeffRef(_include[i]) = 1.0;
-};
+// void LMFixedLambda::computeDeriv() {
+//   const double scale = ThresholdGLM::_epsilon_;
+//   double threshDeriv = 0.0;
+//   for (int i = 0; i < this->size(); i++) {  // loop slower if parallelized?
+//     threshDeriv = ThresholdGLM::approxDThreshCauchy
+//       (this->coeffRef(i), _lambda, scale);
+//     _deriv.coeffRef(i) = _spar.coeffRef(i) + 
+//   }
+//   _deriv = this->unaryExpr([&](const double &x) {
+//       return (ThresholdGLM::approxThresholdCauchy(x, _lambda, scale) +
+// 	      ThresholdGLM::approxDThreshCauchy(x, _lambda, scale) * x); });
+//   for (int i = 0; i < _include.size(); i++)
+//     _deriv.coeffRef(_include[i]) = 1.0;
+// };
 
+void LMFixedLambda::computeDeriv() { };
 
+void LMFixedLambda::update() { };
 
 
 
@@ -152,49 +137,53 @@ void LMFixedLambda::computeDeriv() {
 
 // Setters
 void LMFixedLambda::lambda(const double &lambda) {
-  _lambda = lambda;
+  if (lambda > 0)
+    _lambda = lambda;
 };
 
 
 void LMFixedLambda::setSparse() {
-  _spar = this->matrix().sparseView(1, _lambda).transpose();
-  for (int i = 0; i < _include.size(); i++)
-    _spar.coeffRef(0, _include[i]) = this->coeffRef(_include[i]);
+  const double scale = ThresholdGLM::_epsilon_;
+  double activeCoeff, threshApprox, threshGradApprox;
+  // Adjust _deriv, _priorDeriv, and _spar member data for all
+  // coefficients in the model
+  for (int i = 0; i < this->size(); i++) {
+    // Comptute H(\beta_i) and h(\beta_i) = H'(\beta_i)
+    // approximations to indicator function and its derivative
+    activeCoeff = this->coeffRef(i);
+    threshApprox = ThresholdGLM::approxThresholdCauchy(
+      activeCoeff, _lambda, scale);
+    threshGradApprox = ThresholdGLM::approxDThreshCauchy(
+      activeCoeff, _lambda, scale);
+    // Update stored derivative components
+    _deriv.coeffRef(i) = threshApprox + threshGradApprox * activeCoeff;
+    _priorDeriv.coeffRef(i) = 0.5 * _priorModelSizeScale * threshGradApprox;
+    _spar(i) = threshApprox * activeCoeff;
+  }
+  // "Undo" some of the above steps for coefficients that are always
+  // included in the model
+  for (int i = 0; i < _include.size(); i++) {
+    _deriv.coeffRef(_include[i]) = 1.0;
+    _priorDeriv.coeffRef(_include[i]) = 0.0;
+    _spar(_include[i]) = this->coeffRef(_include[i]);
+  }
 };
 
-void LMFixedLambda::update() {
-  setSparse();
-  computeDeriv();
-};
+
+// void LMFixedLambda::update() {
+//   setSparse();
+//   // computeDeriv();
+// };
 
 
 
 
 // Getters
-int LMFixedLambda::nonZeros() const {
-  return (_spar.nonZeros());
-};
 
 double LMFixedLambda::lambda() const {
   return (_lambda);
 };
 
-double LMFixedLambda::lambdaMax() const {
-  return (_M);
-};
-
-
-double LMFixedLambda::minSparseCoeff() const {
-  double result = _M;
-  double val;
-  for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(_spar, 0);
-       it; ++it) {
-    val = std::abs(it.value());
-    if (val < result)
-      result = val;
-  }
-  return (result);
-};
 
 
 
@@ -205,7 +194,7 @@ Eigen::VectorXd LMFixedLambda::residuals(
   const Eigen::MatrixXd &X,
   const Eigen::VectorXd &y
 ) const {
-  return (y - (_spar * X).transpose());
+  return (y - X * _spar);
 };
 
 
@@ -215,7 +204,9 @@ double LMFixedLambda::objective(
   const double &priorPrecision
 ) const {
   const double likelihood = 0.5 * residuals(X, y).squaredNorm();
-  const double prior = 0.5 * priorPrecision * this->matrix().squaredNorm();
+  const double modelSize = (_spar.array() / *this).sum();
+  const double prior = 0.5 * (priorPrecision *
+    this->matrix().squaredNorm() + _priorModelSizeScale * modelSize);
   return (-(likelihood + prior));
 };
 

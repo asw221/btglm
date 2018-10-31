@@ -1,6 +1,6 @@
 
 
-btlm <- function(X, y, beta0, lambda = NULL,
+btlm <- function(X, y, beta0 = NULL, lambda = NULL,
                  tau.sq = 1e4, M = NULL, include = 1,
                  batch.size = NULL,
                  n.save = 100, thin = 200, burnin = 500,
@@ -9,14 +9,14 @@ btlm <- function(X, y, beta0, lambda = NULL,
                  mt.decay = 0.9, vt.decay = 0.99,
                  rng.seed = NULL
                  ) {
+  if (is.null(beta0))
+    beta0 <- rep(0, ncol(X))
+  else if (ncol(X) != length(beta0))
+    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
   if (is.null(M))  M <- max(abs(beta0))
   if (is.null(lambda))  lambda <- M * rbeta(1, 1, 49)
   if (is.null(learning.rate))  learning.rate <- M / min(dim(X))
   if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
-  if (ncol(X) == length(beta0))
-    X <- t(X)
-  else if (nrow(X) != length(beta0))
-    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
   if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   n.save <- floor(n.save)
   thin <- floor(thin)
@@ -31,21 +31,21 @@ btlm <- function(X, y, beta0, lambda = NULL,
 
 
 
-btlmPostMode <- function(X, y, beta0, lambda = NULL,
+btlmPostMode <- function(X, y, beta0 = NULL, lambda = NULL,
                          tau.sq = 1e4, M = NULL, include = 1,
                          batch.size = NULL,
                          iter.max = 1000, eps = 1e-8, tol = 1e-6,
                          learning.rate = NULL, mt.decay = 0.9, vt.decay = 0.99,
                          rng.seed = NULL
                          ) {
+  if (is.null(beta0))
+    beta0 <- rep(0, ncol(X))
+  else if (ncol(X) != length(beta0))
+    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
   if (is.null(M))  M <- max(abs(beta0[-include]))
   if (is.null(lambda))  lambda <- M * rbeta(1, 1, 49)
   if (is.null(learning.rate))  learning.rate <- M / min(dim(X))
   if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
-  if (ncol(X) == length(beta0))
-    X <- t(X)
-  else if (nrow(X) != length(beta0))
-    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
   if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   structure(
     .Call("btlmPostApprox", X, y, beta0, lambda, tau.sq, M, include - 1,

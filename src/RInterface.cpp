@@ -1,5 +1,6 @@
 
 // #define EIGEN_NO_DEBUG
+#include <cmath>
 #include <cstdlib>
 #include <Eigen/Core>
 #include <Rcpp.h>
@@ -18,6 +19,13 @@
 // -I /Library/Frameworks/R.framework/Versions/3.5/Resources/library/RcppEigen/include/ -std=c++14
 
 
+
+extern "C" SEXP threshApprox(const SEXP x_, const SEXP lambda_) {
+  const Eigen::Map<Eigen::ArrayXd> x(Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(x_));
+  const double lambda(Rcpp::as<double>(lambda_));
+  return Rcpp::wrap(x.unaryExpr([&](const double &x) {
+	return ThresholdGLM::approxThresholdCauchy(x, lambda); }));
+};
 
 
 
@@ -73,8 +81,8 @@ extern "C" SEXP btlm(
     LMFixedLambda beta(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
-      Rcpp::as<double>(M_),
-      include  //, tauSqBeta, X, y
+      include,  //, tauSqBeta, X, y
+      std::log(X.rows())
     );
     
     AdaM<Eigen::ArrayXd> sgd(
@@ -118,10 +126,10 @@ extern "C" SEXP btlm(
       residualPrecision = _Gamma_(ThresholdGLM::_rng_);
 
       // Update regression coefficients -- SGLD + metropolis correction
-      sgldUpdate(beta, sgd, batchSize, dataInd, stepSize, acceptProb,
-		 updateStepSize, X, y, residualPrecision,
-		 priorBetaPrecision, metropolisTarget
-		 );
+      // sgldUpdate(beta, sgd, batchSize, dataInd, stepSize, acceptProb,
+      // 		 updateStepSize, X, y, residualPrecision,
+      // 		 priorBetaPrecision, metropolisTarget
+      // 		 );
 
       if (mcmcIter % thin == 0 && mcmcIter >= burnin) {
 	coefSamples.row(saveCount) = beta;
@@ -208,8 +216,10 @@ extern "C" SEXP btlmPostApprox(
     LMFixedLambda beta(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
-      Rcpp::as<double>(M_),
-      include  // , tauSqBeta, X, y
+      include,  // , tauSqBeta, X, y
+      (std::log(X.rows()) *
+       (y - Eigen::VectorXd::Constant(y.size(), y.mean())).squaredNorm() /
+       y.size())
     );
     
     AdaM<Eigen::ArrayXd> sgd(

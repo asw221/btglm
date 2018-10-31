@@ -65,59 +65,59 @@ Eigen::ArrayXd glmUnitGradient(
 
 
 
-template< typename Link >
-void GLMFixedLambda<Link>::sgldUpdate(
-  AdaM<Eigen::ArrayXd> &sgd,
-  const int &batchSize,
-  std::vector<int> &dataIndex,
-  double &learningScale,
-  double &acceptanceProbability,
-  const bool updateLearningScale,
-  const Eigen::MatrixXd &X,
-  const Eigen::VectorXd &y,
-  const double &priorPrecision,
-  const double &metropolisTarget
-) {
-  const double decay = 0.9, k = 0.01, P = this->size();
-  double gradScale = dataIndex.size() / batchSize;
-  double lpCurrent, lpProposal, pAccept;
+// template< typename Link >
+// void GLMFixedLambda<Link>::sgldUpdate(
+//   AdaM<Eigen::ArrayXd> &sgd,
+//   const int &batchSize,
+//   std::vector<int> &dataIndex,
+//   double &learningScale,
+//   double &acceptanceProbability,
+//   const bool updateLearningScale,
+//   const Eigen::MatrixXd &X,
+//   const Eigen::VectorXd &y,
+//   const double &priorPrecision,
+//   const double &metropolisTarget
+// ) {
+//   const double decay = 0.9, k = 0.01, P = this->size();
+//   double gradScale = dataIndex.size() / batchSize;
+//   double lpCurrent, lpProposal, pAccept;
     
-  // Compute SGD update step -----------------------------------------
-  sgd.virtualMinibatch
-    <GLMFixedLambda<Link>, Eigen::ArrayXd, const Eigen::MatrixXd&,
-     const Eigen::VectorXd&, const double&>
-    (*this, glmUnitGradient<Link>, ThresholdGLM::_rng_, batchSize,
-     dataIndex, X, y, priorPrecision);
+//   // Compute SGD update step -----------------------------------------
+//   sgd.virtualMinibatch
+//     <GLMFixedLambda<Link>, Eigen::ArrayXd, const Eigen::MatrixXd&,
+//      const Eigen::VectorXd&, const double&>
+//     (*this, glmUnitGradient<Link>, ThresholdGLM::_rng_, batchSize,
+//      dataIndex, X, y, priorPrecision);
 
-  Eigen::ArrayXd Mass = Eigen::ArrayXd::Constant(P,
-    _lambda * std::pow(std::log(P) / P, 2));
-  for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator
-	 it(_spar, 0); it; ++it)
-    Mass.coeffRef(it.index()) = std::sqrt(1 / (sgd.velocity().coeffRef(it.index()) + 1e-8));
-  double eta = sgd.eta() * learningScale;
-  Eigen::ArrayXd delta = eta * Mass * sgd.momentum() +
-    std::sqrt(2 * eta / gradScale) * gaussianNoise(Mass.sqrt(), ThresholdGLM::_rng_);
+//   Eigen::ArrayXd Mass = Eigen::ArrayXd::Constant(P,
+//     _lambda * std::pow(std::log(P) / P, 2));
+//   for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator
+// 	 it(_spar, 0); it; ++it)
+//     Mass.coeffRef(it.index()) = std::sqrt(1 / (sgd.velocity().coeffRef(it.index()) + 1e-8));
+//   double eta = sgd.eta() * learningScale;
+//   Eigen::ArrayXd delta = eta * Mass * sgd.momentum() +
+//     std::sqrt(2 * eta / gradScale) * gaussianNoise(Mass.sqrt(), ThresholdGLM::_rng_);
 
-  lpCurrent = objective(X, y, priorPrecision);
-  *this -= delta;
-  setSparse();
-  lpProposal = objective(X, y, priorPrecision);
-  pAccept = std::min(std::exp(lpProposal - lpCurrent), 1.0);
-  acceptanceProbability = acceptanceProbability * decay +
-    pAccept * (1 - decay);
-  if (ThresholdGLM::_Uniform_(ThresholdGLM::_rng_) < pAccept)
-    computeDeriv();
-  else {  // reject update
-    *this += delta;
-    setSparse();
-  }
-  if (updateLearningScale) {
-    if (acceptanceProbability < metropolisTarget)
-      learningScale *= 1 - k;
-    else
-      learningScale *= 1 + k;
-  }
-};
+//   lpCurrent = objective(X, y, priorPrecision);
+//   *this -= delta;
+//   setSparse();
+//   lpProposal = objective(X, y, priorPrecision);
+//   pAccept = std::min(std::exp(lpProposal - lpCurrent), 1.0);
+//   acceptanceProbability = acceptanceProbability * decay +
+//     pAccept * (1 - decay);
+//   if (ThresholdGLM::_Uniform_(ThresholdGLM::_rng_) < pAccept)
+//     computeDeriv();
+//   else {  // reject update
+//     *this += delta;
+//     setSparse();
+//   }
+//   if (updateLearningScale) {
+//     if (acceptanceProbability < metropolisTarget)
+//       learningScale *= 1 - k;
+//     else
+//       learningScale *= 1 + k;
+//   }
+// };
 
 
 

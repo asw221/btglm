@@ -5,6 +5,7 @@
 #include <random>
 
 using std::pow;
+using std::atan;
 
 
 #ifndef _THRESHOLD_GLM_
@@ -15,6 +16,9 @@ namespace ThresholdGLM {
   extern std::mt19937 _rng_;
   extern std::uniform_real_distribution<double> _Uniform_;
 
+  extern double _epsilon_;  // Threshold approximation function scale
+  extern double _lambdaDecayRate_;
+  extern double _minLambda_;
   // extern double _dthreshScale_;
   // extern double _pRejectDecay_;
   // extern double _pRejectTarget_[2];
@@ -25,18 +29,30 @@ namespace ThresholdGLM {
     return (scale / ((pow(scale, 2) + pow(x - location, 2)) * M_PI));
   };
 
+  template< typename T = double >
+  T pcauchy(const T &x, const T &location = 0.0, const T &scale = 1.0) {
+    return (0.5 + atan((x - location) / scale) / M_PI);
+  };
+
+
+  double approxThresholdCauchy(
+    const double &theta,
+    const double &lamba,
+    const double &eps = 0.1
+  );
+
 
   double approxDThreshCauchy(
     const double &theta,
     const double &lambda,
-    const double &eps = 1e-6
+    const double &eps = 0.1
   );
 
   double approxDPsiCauchy(  // psi = ln(lambda) - ln(M - lambda)
     const double &lambda,
     const double &theta,
     const double &M,
-    const double &eps = 1e-6
+    const double &eps = 0.1
   );
 
 

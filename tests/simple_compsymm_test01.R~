@@ -1,0 +1,15 @@
+
+library (btglm)
+
+setwd ("~/Dropbox/software/btglm/tests/")
+source (file.path("sims", "compound.symmetric.R"))
+
+
+dat <- sim.data(n = 100, p = 200, rho = 0.5, q = 5)
+
+system.time(
+fit0 <- btlmPostMode(dat$X, dat$y, tol = 1e-5, beta0 = rnorm(ncol(dat$X)), lambda = 3.5,
+                     iter.max = 1000)
+)
+
+

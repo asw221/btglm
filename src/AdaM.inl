@@ -54,6 +54,7 @@ AdaM<T>::AdaM(
     throw (std::logic_error("eps must be between (0, inf)"));
 
   _eta = eta;
+  _etaScl = 1.0;
   _gamma[0] = gamma1;
   _gamma[1] = gamma2;
   _eps = eps;
@@ -92,8 +93,8 @@ void AdaM<T>::minibatchUpdate(
   std::vector<int> &index,
   Args&&... args
 ) {
-  // const int N = index.size();
-  // int n = 0;
+  const int N = index.size();
+  int n = 0;
   std::shuffle(index.begin(), index.end(), rng);
   std::vector<int>::iterator it(index.begin());
   std::function<R(const S&, const int&, Args&&...)> Grad(unitGradient);
@@ -101,14 +102,16 @@ void AdaM<T>::minibatchUpdate(
   for (int j = 1; it != index.end(); it++, j++) {
     // gt += std::function< R(const S&, const int&, Args&&...) >
     //   (unitGradient)(theta, (*it), std::forward<Args>(args)...);
-    // n++;
+    n++;
     gt += Grad(theta, (*it), std::forward<Args>(args)...);
     if (j % batchSize == 0) {
       // gt *= N / n;
+      _etaScl = N / n;
       updateMomentum(gt);
       updateVelocity(gt);
       updatePosition(theta, rng);
       gt *= 0;
+      _etaScl = 1.0;
       // n = 0;
     }
   }
@@ -181,7 +184,7 @@ double AdaM<T>::dtheta() const {
 
 template< typename T >
 double AdaM<T>::eta() const {
-  double eta = _eta * sqrt(1 - pow(_gamma[1], _iter));
+  double eta = _eta * _etaScl * sqrt(1 - pow(_gamma[1], _iter));
   return (_useRMS ? eta : eta / (1 - pow(_gamma[0], _iter)));
 };
 
@@ -201,6 +204,7 @@ template< typename T >
 void AdaM<T>::clearHistory() {
   _mt *= 0;
   _vt *= 0;
+  _etaScl = 1.0;
   _useLD = false;
   _useRMS = false;
   _dtheta *= 0;
@@ -217,9 +221,8 @@ void AdaM<T>::incrementIteration() {
 template< typename T >
 void AdaM<T>::toggleLangevinDynamics(const bool &useLD) {
   _useLD = useLD;
-  if (useLD)
-    _useRMS = true;
 };
+
 
 template< typename T >
 void AdaM<T>::toggleRMSprop(const bool &useRMS) {
@@ -236,12 +239,18 @@ void AdaM<T>::toggleRMSprop(const bool &useRMS) {
 
 template< typename T >
 T AdaM<T>::computeDelta(std::mt19937 &rng) const {
-  T scale = eta() / (sqrt(_vt) + _eps);
-  T delta = scale * _mt;
-  if (_useLD)
-    delta += sqrt(2) * gaussianNoise(sqrt(scale), rng);
+  T delta = eta() / (sqrt(_vt) + _eps) * _mt;
+  // T scale = eta() / (sqrt(_vt) + _eps);
+  // T delta = scale * _mt;
+  if (_useLD) {
+    double scl = sqrt(2) * eta() / _etaScl;
+    if (!_useRMS)
+      scl *= 1 - pow(_gamma[0], _iter);
+    delta += gaussianNoise(sqrt(scl / (sqrt(_vt) + _eps)), rng);
+  }
   return (delta);
 };
+
 
 template< typename T >
 void AdaM<T>::updateMomentum(const T &gt) {

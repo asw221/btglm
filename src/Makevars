@@ -1,4 +1,8 @@
 
 ## PKG_CXXFLAGS = -O3 -std=c++14 -I/usr/local/clang6/include
-## 
-PKG_CXXFLAGS = -DNDEBUG -DEIGEN_DONT_VECTORIZE -O3 -std=c++14
+##
+## -DEIGEN_DONT_VECTORIZE --> test run times with and without
+PKG_CXXFLAGS = -DNDEBUG -O3 -Xpreprocessor -fopenmp -lomp -std=c++17
+
+
+## -L /usr/local/opt/libomp/lib -I /usr/local/opt/libomp/include
