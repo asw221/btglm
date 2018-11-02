@@ -184,7 +184,6 @@ extern "C" SEXP btlmPostApprox(
   const SEXP beta_,
   const SEXP lambda_,
   const SEXP tauSqBeta_,
-  const SEXP M_,
   const SEXP include_,
   const SEXP batchSize_,
   const SEXP iterMaxSgd_,
@@ -193,6 +192,9 @@ extern "C" SEXP btlmPostApprox(
   const SEXP learningRate_,
   const SEXP momentumDecay_,
   const SEXP velocityDecay_,
+  const SEXP lambdaDecay_,
+  const SEXP minLambda_,
+  const SEXP priorModelSize_,
   const SEXP seed_
 ) {
   try {
@@ -210,6 +212,8 @@ extern "C" SEXP btlmPostApprox(
 
     // std::mt19937 rng(Rcpp::as<int>(seed_));
     ThresholdGLM::_rng_.seed(Rcpp::as<int>(seed_));
+    ThresholdGLM::_lambdaDecayRate_ = Rcpp::as<double>(lambdaDecay_);
+    ThresholdGLM::_minLambda_ = Rcpp::as<double>(minLambda_);
     double precision, postPrecRate;
     
     
@@ -217,9 +221,7 @@ extern "C" SEXP btlmPostApprox(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
       include,  // , tauSqBeta, X, y
-      (std::log(X.rows()) *
-       (y - Eigen::VectorXd::Constant(y.size(), y.mean())).squaredNorm() /
-       y.size())
+      Rcpp::as<double>(priorModelSize_)
     );
     
     AdaM<Eigen::ArrayXd> sgd(

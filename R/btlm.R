@@ -31,25 +31,28 @@ btlm <- function(X, y, beta0 = NULL, lambda = NULL,
 
 
 
-btlmPostMode <- function(X, y, beta0 = NULL, lambda = NULL,
-                         tau.sq = 1e4, M = NULL, include = 1,
+btlmPostMode <- function(X, y, beta0 = NULL, lambda = 1,
+                         tau.sq = 1e4, include = 1,
                          batch.size = NULL,
                          iter.max = 1000, eps = 1e-8, tol = 1e-6,
                          learning.rate = NULL, mt.decay = 0.9, vt.decay = 0.99,
+                         lambda.decay = 0.9997, min.lambda = 0.35,
+                         model.size.prior = log(length(y)),
                          rng.seed = NULL
                          ) {
   if (is.null(beta0))
     beta0 <- rep(0, ncol(X))
   else if (ncol(X) != length(beta0))
     stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
-  if (is.null(M))  M <- max(abs(beta0[-include]))
-  if (is.null(lambda))  lambda <- M * rbeta(1, 1, 49)
-  if (is.null(learning.rate))  learning.rate <- M / min(dim(X))
+  if (lambda <= 0)
+    stop ("Threshold parameter lambda must be > 0")
+  if (is.null(learning.rate))  learning.rate <- lambda / min(dim(X))
   if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
   if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   structure(
-    .Call("btlmPostApprox", X, y, beta0, lambda, tau.sq, M, include - 1,
+    .Call("btlmPostApprox", X, y, beta0, lambda, tau.sq, include - 1,
           batch.size, iter.max, eps, tol, learning.rate, mt.decay, vt.decay,
+          lambda.decay, min.lambda, model.size.prior,
           rng.seed,
           PACKAGE = "btglm"),
     class = "btglm")

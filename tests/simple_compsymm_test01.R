@@ -10,8 +10,10 @@ dat <- sim.data(n = 100, p = 200, rho = 0.5, q = 5)
 
 
 system.time(
-fit0 <- btlmPostMode(dat$X, dat$y, tol = 1e-5, beta0 = rep(0, ncol(dat$X)), lambda = 3.5,
-                     iter.max = 10000, learning.rate = 0.01)
+fit0 <- btlmPostMode(dat$X, dat$y, tol = 1e-5, lambda = 3.5,
+                     iter.max = 10000, learning.rate = 0.01,
+                     lambda.decay = 0.9999,
+                     model.size.prior = log(length(dat$y)) * dat$sigma.sq)
 )
 
 
