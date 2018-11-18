@@ -29,13 +29,14 @@ extern "C" SEXP threshApprox(const SEXP x_, const SEXP lambda_) {
 
 
 
+
+
 extern "C" SEXP btlm(
   const SEXP X_,
   const SEXP y_,
   const SEXP beta_,
   const SEXP lambda_,
   const SEXP tauSqBeta_,
-  const SEXP M_,
   const SEXP include_,
   const SEXP batchSize_,
   const SEXP nSave_,
@@ -47,7 +48,10 @@ extern "C" SEXP btlm(
   const SEXP learningRate_,
   const SEXP momentumDecay_,
   const SEXP velocityDecay_,
-  const SEXP metropolisTarget_,
+  const SEXP lambdaDecay_,
+  const SEXP minLambda_,
+  const SEXP priorModelSize_,
+  const SEXP threshApproxScale_,
   const SEXP seed_
 ) {
   try {
@@ -65,28 +69,28 @@ extern "C" SEXP btlm(
     const int burnin(Rcpp::as<int>(burnin_));
     const int iterMaxSgd(Rcpp::as<int>(iterMaxSgd_));
     const Rcpp::IntegerVector include(include_);
-    const double metropolisTarget(Rcpp::as<double>(metropolisTarget_));
 
-    bool updateStepSize = false;
     
-    double postPrecRate, residualPrecision;
-    double stepSize = 1.0;
-    double acceptProb = 0.0;
     int saveCount = 0, mcmcIter = 0;
+    double precision, postPrecRate;
+    
     std::gamma_distribution<double> _Gamma_(0.1, 0.1);
 
     ThresholdGLM::_rng_.seed(Rcpp::as<int>(seed_));
+    ThresholdGLM::_epsilon_ = Rcpp::as<double>(threshApproxScale_);
+    ThresholdGLM::_lambdaDecayRate_ = Rcpp::as<double>(lambdaDecay_);
+    ThresholdGLM::_minLambda_ = Rcpp::as<double>(minLambda_);
 
     
     LMFixedLambda beta(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
       include,  //, tauSqBeta, X, y
-      std::log(X.rows())
+      Rcpp::as<double>(priorModelSize_)
     );
     
     AdaM<Eigen::ArrayXd> sgd(
-      Eigen::ArrayXd::Zero(beta.size() + 1),
+      Eigen::ArrayXd::Zero(beta.size()),
       Rcpp::as<double>(learningRate_),
       Rcpp::as<double>(momentumDecay_),
       Rcpp::as<double>(velocityDecay_),
@@ -112,40 +116,37 @@ extern "C" SEXP btlm(
 
     // sgd.clearHistory();
     // sgd.toggleRMSprop(true);
+    ThresholdGLM::_lambdaDecayRate_ = 1.0;
+    sgd.toggleLangevinDynamics(true);
+    Rcpp::Rcout << beta.minActiveCoeff() << "\n";
+    beta.lambda(findReasonableLambda(beta));
+    
     while (saveCount < nSave) {
-      // Adjust adaptive step size settings
-      if (mcmcIter == 50)
-	updateStepSize = true;
-      if (mcmcIter == burnin)
-	updateStepSize = false;
-      
       // Update residual precision -- full conditional
       postPrecRate = -beta.objective(X, y, priorBetaPrecision) + priorPrecRate;
       _Gamma_.param(std::gamma_distribution<double>
 		    ::param_type(postPrecShape, 1 / postPrecRate));
-      residualPrecision = _Gamma_(ThresholdGLM::_rng_);
+      precision = _Gamma_(ThresholdGLM::_rng_);
 
-      // Update regression coefficients -- SGLD + metropolis correction
-      // sgldUpdate(beta, sgd, batchSize, dataInd, stepSize, acceptProb,
-      // 		 updateStepSize, X, y, residualPrecision,
-      // 		 priorBetaPrecision, metropolisTarget
-      // 		 );
+      // Update coefficients
+      sgd.minibatchUpdate
+    	<LMFixedLambda, Eigen::ArrayXd,
+    	 const Eigen::MatrixXd&, const Eigen::VectorXd&, const double&>
+        (beta, lmUnitGradient, ThresholdGLM::_rng_, batchSize,
+    	 dataInd, X, y, priorBetaPrecision);
+      
 
       if (mcmcIter % thin == 0 && mcmcIter >= burnin) {
 	coefSamples.row(saveCount) = beta;
-	sigmaSamples(saveCount) = std::sqrt(1 / residualPrecision);
+	sigmaSamples(saveCount) = 1 / std::sqrt(precision);
 	saveCount++;
       }
-      // if (mcmcIter < burnin)
-      // 	sgd.eta(sgd.eta() * beta.updateScale());
-	// Rcpp::Rcout << "Iter " << saveCount << "; " << beta.lambda() << "\n";
       mcmcIter++;
     };
     
     return (Rcpp::wrap(Rcpp::List::create(
-		       Rcpp::Named("acceptanceRate") = acceptProb,
 		       Rcpp::Named("coefficients") = coefSamples,
-		       Rcpp::Named("eta") = sgd.eta() * stepSize,
+		       Rcpp::Named("eta") = sgd.eta(),
 		       Rcpp::Named("include") = include,
 		       Rcpp::Named("lambda") = beta.lambda(),
 		       Rcpp::Named("N") = X.cols(),
@@ -195,6 +196,7 @@ extern "C" SEXP btlmPostApprox(
   const SEXP lambdaDecay_,
   const SEXP minLambda_,
   const SEXP priorModelSize_,
+  const SEXP threshApproxScale_,
   const SEXP seed_
 ) {
   try {
@@ -212,6 +214,7 @@ extern "C" SEXP btlmPostApprox(
 
     // std::mt19937 rng(Rcpp::as<int>(seed_));
     ThresholdGLM::_rng_.seed(Rcpp::as<int>(seed_));
+    ThresholdGLM::_epsilon_ = Rcpp::as<double>(threshApproxScale_);
     ThresholdGLM::_lambdaDecayRate_ = Rcpp::as<double>(lambdaDecay_);
     ThresholdGLM::_minLambda_ = Rcpp::as<double>(minLambda_);
     double precision, postPrecRate;

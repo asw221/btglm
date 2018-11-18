@@ -142,6 +142,10 @@ void LMFixedLambda::lambda(const double &lambda) {
 };
 
 
+
+
+
+
 void LMFixedLambda::setSparse() {
   const double scale = ThresholdGLM::_epsilon_;
   double activeCoeff, threshApprox, threshGradApprox;
@@ -187,6 +191,30 @@ double LMFixedLambda::lambda() const {
 
 
 
+double LMFixedLambda::minActiveCoeff() const {
+  // return min absolute coefficient value that's >= lambda
+  double currentMin = 1.0e12;  // 
+  double val;                  // temporary for theta[j]
+  int includeIndex = 0;
+  int includeVal = _include[includeIndex];
+  for (int i = 0; i < this->size(); i++) {
+    if (i == includeVal) {  // avoid included coefs
+      includeIndex++;
+      if (includeIndex < _include.size())
+	includeVal = _include[includeIndex];
+    }
+    else {
+      val = std::abs(this->coeffRef(i));
+      if (val >= _lambda)
+	currentMin = std::min(currentMin, val);
+    }
+  }
+  return (currentMin);
+};
+
+
+
+
 
 
 // Misc
@@ -216,6 +244,9 @@ double LMFixedLambda::objective(
 
 
 
+double findReasonableLambda(const LMFixedLambda &theta) {
+  return (0.5 * theta.lambda() + 0.5 * theta.minActiveCoeff());
+};
 
 
 

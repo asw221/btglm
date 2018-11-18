@@ -85,6 +85,10 @@ Eigen::ArrayXd glmUnitGradient(
 
 
 
+double findReasonableLambda(const LMFixedLambda &theta);
+
+
+
 
 
 
@@ -170,6 +174,7 @@ public:
 
   // Getters
   double lambda() const;
+  double minActiveCoeff() const;
 
   
   // Allows Eigen expressions to be assigned to this class

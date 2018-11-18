@@ -1,30 +1,36 @@
 
 
-btlm <- function(X, y, beta0 = NULL, lambda = NULL,
-                 tau.sq = 1e4, M = NULL, include = 1,
+btlm <- function(X, y, beta0 = NULL, lambda = 1,
+                 tau.sq = 1e4, include = 1,
                  batch.size = NULL,
                  n.save = 100, thin = 200, burnin = 500,
                  iter.max.sgd = 2000, eps = 1e-8, tol = 1e-6,
-                 learning.rate = NULL, metropolis.target = 0.9,
-                 mt.decay = 0.9, vt.decay = 0.99,
+                 learning.rate = NULL, mt.decay = 0.9, vt.decay = 0.99,
+                 lambda.decay = 0.9997, min.lambda = 0.35,
+                 model.size.prior = log(length(y)),
+                 threshold.eps = 0.1,
                  rng.seed = NULL
                  ) {
   if (is.null(beta0))
     beta0 <- rep(0, ncol(X))
   else if (ncol(X) != length(beta0))
-    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
-  if (is.null(M))  M <- max(abs(beta0))
-  if (is.null(lambda))  lambda <- M * rbeta(1, 1, 49)
-  if (is.null(learning.rate))  learning.rate <- M / min(dim(X))
-  if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
+    stop ("dim(X) != dim(beta0) (", length(beta0), ")")
+  if (lambda <= 0)
+    stop ("Threshold parameter lambda must be > 0")
+  if (threshold.eps <= 0)
+    stop ("Threshold approximation scale must be > 0")
   if (is.null(batch.size)) batch.size <- min(100, nrow(X))
-  n.save <- floor(n.save)
-  thin <- floor(thin)
-  burnin <- floor(burnin)
+  if (is.null(learning.rate))  learning.rate <- lambda / min(dim(X))
+  if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
+  n.save <- floor(abs(n.save))
+  thin <- floor(abs(thin))
+  burnin <- floor(abs(burnin))
   structure(
-    .Call("btlm", X, y, beta0, lambda, tau.sq, M, include - 1, batch.size,
-          n.save, thin, burnin, iter.max.sgd, eps, tol, learning.rate, mt.decay,
-          vt.decay, metropolis.target, rng.seed, PACKAGE = "btglm"),
+    .Call("btlm", X, y, beta0, lambda, tau.sq, include - 1, batch.size,
+          n.save, thin, burnin, iter.max.sgd, eps, tol,
+          learning.rate, mt.decay, vt.decay,
+          lambda.decay, min.lambda, model.size.prior, threshold.eps,
+          rng.seed, PACKAGE = "btglm"),
     class = "btglm")
 }
 
@@ -38,21 +44,24 @@ btlmPostMode <- function(X, y, beta0 = NULL, lambda = 1,
                          learning.rate = NULL, mt.decay = 0.9, vt.decay = 0.99,
                          lambda.decay = 0.9997, min.lambda = 0.35,
                          model.size.prior = log(length(y)),
+                         threshold.eps = 0.1,
                          rng.seed = NULL
                          ) {
   if (is.null(beta0))
     beta0 <- rep(0, ncol(X))
   else if (ncol(X) != length(beta0))
-    stop ("dim(X) not related to dim(beta0) (", length(beta0), ")")
+    stop ("dim(X) != dim(beta0) (", length(beta0), ")")
   if (lambda <= 0)
     stop ("Threshold parameter lambda must be > 0")
+  if (threshold.eps <= 0)
+    stop ("Threshold approximation scale must be > 0")
+  if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   if (is.null(learning.rate))  learning.rate <- lambda / min(dim(X))
   if (is.null(rng.seed))  rng.seed <- as.integer(Sys.time())
-  if (is.null(batch.size)) batch.size <- min(100, nrow(X))
   structure(
     .Call("btlmPostApprox", X, y, beta0, lambda, tau.sq, include - 1,
           batch.size, iter.max, eps, tol, learning.rate, mt.decay, vt.decay,
-          lambda.decay, min.lambda, model.size.prior,
+          lambda.decay, min.lambda, model.size.prior, threshold.eps,
           rng.seed,
           PACKAGE = "btglm"),
     class = "btglm")
