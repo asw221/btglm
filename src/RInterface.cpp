@@ -16,6 +16,16 @@
 #include "formatSgdOutput.h"
 
 
+/*
+RInterface.cpp
+______________________________________________________________________
+
+Contains all of the implementations for functions that get
+compiled to dll's and are accessible to R's .Call() interface
+______________________________________________________________________
+ */
+
+
 // -I /Library/Frameworks/R.framework/Versions/3.5/Resources/library/RcppEigen/include/ -std=c++14
 
 
@@ -30,7 +40,9 @@ extern "C" SEXP threshApprox(const SEXP x_, const SEXP lambda_) {
 
 
 
-
+// Interface for thresholded linear model implementation using
+// Stochastic Gradient Langevin Dynamics for MCMC sampling
+// ===================================================================
 extern "C" SEXP btlm(
   const SEXP X_,
   const SEXP y_,
@@ -55,6 +67,8 @@ extern "C" SEXP btlm(
   const SEXP seed_
 ) {
   try {
+    // Parameter initialization
+    // ---------------------------------------------------------------
     const Eigen::Map<Eigen::MatrixXd>
       X(Rcpp::as<Eigen::Map<Eigen::MatrixXd> >(X_));
     const Eigen::Map<Eigen::VectorXd>
@@ -85,7 +99,7 @@ extern "C" SEXP btlm(
     LMFixedLambda beta(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
-      include,  //, tauSqBeta, X, y
+      include,
       Rcpp::as<double>(priorModelSize_)
     );
     
@@ -106,6 +120,8 @@ extern "C" SEXP btlm(
     Eigen::MatrixXd coefSamples(nSave, beta.size());
     Eigen::VectorXd sigmaSamples(nSave);
 
+    // Optimize to find/center on the nearest posterior mode
+    // ---------------------------------------------------------------
     while (!sgd.converged(tol) && sgd.iteration() < iterMaxSgd) {
       sgd.minibatchUpdate
     	<LMFixedLambda, Eigen::ArrayXd,
@@ -114,29 +130,32 @@ extern "C" SEXP btlm(
     	 dataInd, X, y, priorBetaPrecision);
     };
 
-    // sgd.clearHistory();
-    // sgd.toggleRMSprop(true);
-    ThresholdGLM::_lambdaDecayRate_ = 1.0;
+    
+    // Switch to SGLD for sampling
+    // Fix lambda to a constant value based on current posterior mode
+    // ---------------------------------------------------------------
     sgd.toggleLangevinDynamics(true);
-    Rcpp::Rcout << beta.minActiveCoeff() << "\n";
+    ThresholdGLM::_lambdaDecayRate_ = 1.0;
     beta.lambda(findReasonableLambda(beta));
     
     while (saveCount < nSave) {
+      // Update coefficients
+      for (int i = 0; i < thin; i++) {
+	sgd.minibatchUpdate
+	  <LMFixedLambda, Eigen::ArrayXd,
+	   const Eigen::MatrixXd&, const Eigen::VectorXd&, const double&>
+	  (beta, lmUnitGradient, ThresholdGLM::_rng_, batchSize,
+	   dataInd, X, y, priorBetaPrecision);
+      }
+      
       // Update residual precision -- full conditional
       postPrecRate = -beta.objective(X, y, priorBetaPrecision) + priorPrecRate;
       _Gamma_.param(std::gamma_distribution<double>
 		    ::param_type(postPrecShape, 1 / postPrecRate));
       precision = _Gamma_(ThresholdGLM::_rng_);
-
-      // Update coefficients
-      sgd.minibatchUpdate
-    	<LMFixedLambda, Eigen::ArrayXd,
-    	 const Eigen::MatrixXd&, const Eigen::VectorXd&, const double&>
-        (beta, lmUnitGradient, ThresholdGLM::_rng_, batchSize,
-    	 dataInd, X, y, priorBetaPrecision);
       
-
-      if (mcmcIter % thin == 0 && mcmcIter >= burnin) {
+      // Save samples
+      if (mcmcIter >= (burnin / thin)) {
 	coefSamples.row(saveCount) = beta;
 	sigmaSamples(saveCount) = 1 / std::sqrt(precision);
 	saveCount++;
@@ -178,7 +197,9 @@ extern "C" SEXP btlm(
 
 
 
-// .CAll'able R interface
+// Interface for thresholded linear model implementation using
+// stochastic gradient descent-based optimization
+// ===================================================================
 extern "C" SEXP btlmPostApprox(
   const SEXP X_,
   const SEXP y_,
@@ -200,6 +221,8 @@ extern "C" SEXP btlmPostApprox(
   const SEXP seed_
 ) {
   try {
+    // Parameter initialization
+    // ---------------------------------------------------------------
     const Eigen::Map<Eigen::MatrixXd>
       X(Rcpp::as<Eigen::Map<Eigen::MatrixXd> >(X_));
     const Eigen::Map<Eigen::VectorXd>
@@ -212,7 +235,6 @@ extern "C" SEXP btlmPostApprox(
     const int iterMaxSgd(Rcpp::as<int>(iterMaxSgd_));
     const Rcpp::IntegerVector include(include_);
 
-    // std::mt19937 rng(Rcpp::as<int>(seed_));
     ThresholdGLM::_rng_.seed(Rcpp::as<int>(seed_));
     ThresholdGLM::_epsilon_ = Rcpp::as<double>(threshApproxScale_);
     ThresholdGLM::_lambdaDecayRate_ = Rcpp::as<double>(lambdaDecay_);
@@ -223,7 +245,7 @@ extern "C" SEXP btlmPostApprox(
     LMFixedLambda beta(
       Rcpp::as<Eigen::Map<Eigen::ArrayXd> >(beta_),
       Rcpp::as<double>(lambda_),
-      include,  // , tauSqBeta, X, y
+      include,  
       Rcpp::as<double>(priorModelSize_)
     );
     
@@ -239,7 +261,9 @@ extern "C" SEXP btlmPostApprox(
     for (int i = 0; i < y.size(); i++)
       dataInd[i] = i;
 
-    
+
+    // Optimize to find/center on the nearest posterior mode
+    // ---------------------------------------------------------------    
     while (!sgd.converged(tol) && sgd.iteration() < iterMaxSgd) {
       sgd.minibatchUpdate
 	<LMFixedLambda, Eigen::ArrayXd,

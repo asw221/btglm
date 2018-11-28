@@ -77,7 +77,7 @@ sigma.btglm <- function(object, ...) {
 }
 
 residuals.btglm <- function(object, X, y, ...) {
-  c(y - t(t(coef(object, ...)) %*% X))
+  y - c(X %*% coef(object, ...))
 }
 
 logLik.btglm <- function(object, X, y, ...) {
