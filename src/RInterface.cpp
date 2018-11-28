@@ -88,7 +88,7 @@ extern "C" SEXP btlm(
     int saveCount = 0, mcmcIter = 0;
     double precision, postPrecRate;
     
-    std::gamma_distribution<double> _Gamma_(0.1, 0.1);
+    std::gamma_distribution<double> _Gamma_(priorPrecShape, priorPrecRate);
 
     ThresholdGLM::_rng_.seed(Rcpp::as<int>(seed_));
     ThresholdGLM::_epsilon_ = Rcpp::as<double>(threshApproxScale_);
